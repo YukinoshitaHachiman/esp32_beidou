@@ -1,0 +1,7 @@
+{
+    "idf.flashType": "UART",
+    "idf.portWin": "COM10",
+    "files.associations": {
+        "stdio.h": "c"
+    }
+}
