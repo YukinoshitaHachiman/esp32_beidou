@@ -5,8 +5,7 @@
 
 #define TAG "HTTP_CLIENT"
 #define SERVER_URL "http://192.168.172.214:8080/api/gps"
-//#define SERVER_URL "http://192.168.31.13:8080/api/gps"
-//#define SERVER_URL "http://210.35.56.181:8080/api/gps"
+
 esp_err_t send_gps_data_to_server(const gps_data_t* data)
 {
     esp_http_client_config_t config = {

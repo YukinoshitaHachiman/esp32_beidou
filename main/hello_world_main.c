@@ -10,30 +10,55 @@
 #include "wifi_station.h"
 #include "http_client.h"
 #include "lcd_init.h"
+#include <math.h>
 #define UART_NUM UART_NUM_1
 #define RX_PIN 18
-#define TX_PIN UART_PIN_NO_CHANGE
+#define TX_PIN 19
 #define BUF_SIZE 1024
 
 static QueueHandle_t uart1_queue;
 static const char *TAG = "BEIDOU_MAIN"; 
 void update_gps_info(const char *lat, char lat_dir, const char *lon, char lon_dir, const char *time);
 
-// 修改GGA数据解析函数
+double convert_to_decimal_degrees(const char* dm_str) {
+    if (!dm_str || strlen(dm_str) == 0) {
+        return 0.0;
+    }
+    
+    double value = atof(dm_str);
+    
+    // 分离度和分
+    int degrees = (int)(value / 100);           // 提取度部分
+    double minutes = value - (degrees * 100);    // 提取分部分
+    
+    // 计算: 度 + (分/60)
+    double decimal_degrees = degrees + (minutes / 60.0);
+    
+    return decimal_degrees;
+}
+
+// GGA数据
 void parse_gga(const char* sentence) {
-    char time[20] = {0};  // 增加缓冲区大小
-    char lat[20] = {0};   // 增加缓冲区大小
-    char lon[20] = {0};   // 增加缓冲区大小
+    
+    //printf("\n原始GGA数据: %s\n", sentence);
+    
+    char time[20] = {0};  
+    char lat[20] = {0};   
+    char lon[20] = {0};   
     char lat_dir = 0, lon_dir = 0;
     int fix_quality = 0, num_satellites = 0;
     float altitude = 0.0;
     
-    // 使用更宽松的格式匹配
     int result = sscanf(sentence, "$GNGGA,%[^,],%[^,],%c,%[^,],%c,%d,%d,%*[^,],%f",
         time, lat, &lat_dir, lon, &lon_dir, &fix_quality, &num_satellites, &altitude);
     
-    // 放宽结果检查条件
-    if(result >= 5) {  // 只要能获取到基本的时间和位置信息就显示
+    // 打印解析出的原始经纬度数据
+    // printf("解析结果:\n");
+    // printf("原始纬度数据: %s %c\n", lat, lat_dir);
+    // printf("原始经度数据: %s %c\n", lon, lon_dir);
+    
+    
+    if(result >= 5) {  
         printf("\n=== GGA解析结果 ===\n");
         // 仅显示时间的前6位
         if(strlen(time) >= 6) {
@@ -45,30 +70,27 @@ void parse_gga(const char* sentence) {
             printf("时间: %s\n", time);
         }
         
-        printf("纬度: %s %c\n", lat, lat_dir ? lat_dir : 'N');
-        printf("经度: %s %c\n", lon, lon_dir ? lon_dir : 'E');
-        if(result >= 6) {
-            printf("定位质量: %d (0=无效定位 1=GPS定位 2=DGPS定位)\n", fix_quality);
-        }
-        if(result >= 7) {
-            printf("卫星数量: %d\n", num_satellites);
-        }
-        if(result >= 8) {
-            printf("海拔高度: %.1f米\n", altitude);
-        }
-        printf("================\n");
-
-
-        update_gps_info(lat, lat_dir ? lat_dir : 'N',
-            lon, lon_dir ? lon_dir : 'E',
-            time);
+        // 转换并显示经纬度
+        double decimal_lat = convert_to_decimal_degrees(lat);
+        double decimal_lon = convert_to_decimal_degrees(lon);
         
+        printf("纬度: %.7f° %c\n", decimal_lat, lat_dir ? lat_dir : 'N');
+        printf("经度: %.7f° %c\n", decimal_lon, lon_dir ? lon_dir : 'E');
+        
+       
+        char lat_str[20], lon_str[20];
+        snprintf(lat_str, sizeof(lat_str), "%.7f", decimal_lat);
+        snprintf(lon_str, sizeof(lon_str), "%.7f", decimal_lon);
+        
+        update_gps_info(lat_str, lat_dir ? lat_dir : 'N',
+            lon_str, lon_dir ? lon_dir : 'E',
+            time);
         
         // 创建数据结构并发送
         gps_data_t gps_data = {0};
         strncpy(gps_data.time, time, sizeof(gps_data.time)-1);
-        strncpy(gps_data.latitude, lat, sizeof(gps_data.latitude)-1);
-        strncpy(gps_data.longitude, lon, sizeof(gps_data.longitude)-1);
+        strncpy(gps_data.latitude, lat_str, sizeof(gps_data.latitude)-1);
+        strncpy(gps_data.longitude, lon_str, sizeof(gps_data.longitude)-1);
         gps_data.lat_dir = lat_dir;
         gps_data.lon_dir = lon_dir;
         gps_data.fix_quality = fix_quality;
@@ -82,18 +104,18 @@ void parse_gga(const char* sentence) {
     }
 }
 
-// 修改ZDA数据解析函数
+// ZDA数据
 void parse_zda(const char* sentence) {
-    char time[20] = {0};  // 增加缓冲区大小
+    char time[20] = {0};  
     int day = 0, month = 0, year = 0;
     int hour_zone = 0, minute_zone = 0;
     
-    // 使用更宽松的格式匹配
+    
     int result = sscanf(sentence, "$GNZDA,%[^,],%d,%d,%d,%d,%d",
         time, &day, &month, &year, &hour_zone, &minute_zone);
     
-    // 放宽结果检查条件
-    if(result >= 1) {  // 只要能获取到时间就显示
+    
+    if(result >= 1) {  
         printf("\n=== ZDA解析结果 ===\n");
         if(strlen(time) >= 6) {
             printf("时间: %c%c:%c%c:%c%c\n",
@@ -115,7 +137,7 @@ void parse_zda(const char* sentence) {
 }
 
 void uart_event_task(void *pvParameters)
-{    // 将当前任务添加到看门狗监控
+{    
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
     uart_event_t event;
     uint8_t* dtmp = (uint8_t*) malloc(BUF_SIZE);
@@ -123,29 +145,23 @@ void uart_event_task(void *pvParameters)
     static int buffer_len = 0;
 
     for(;;) {
-        // 添加延时，让出CPU时间
         vTaskDelay(pdMS_TO_TICKS(5));
-        // 重置看门狗计时器
         esp_task_wdt_reset();
-
         if(xQueueReceive(uart1_queue, (void *)&event, 5 / portTICK_PERIOD_MS)) {
             if(event.type == UART_DATA) {
                 bzero(dtmp, BUF_SIZE);
                 int len = uart_read_bytes(UART_NUM, dtmp, event.size, 5 / portTICK_PERIOD_MS);
                 
                 if(len > 0) {
-                    // 将新数据添加到缓冲区
                     if(buffer_len + len < sizeof(buffer)) {
                         memcpy(buffer + buffer_len, dtmp, len);
                         buffer_len += len;
                         buffer[buffer_len] = '\0';
                     } else {
-                        // 缓冲区满，清空重新开始
                         buffer_len = 0;
                         continue;
                     }
                     
-                    // 查找并处理完整的NMEA语句
                     char *start = buffer;
                     char *end;
                     while((end = strstr(start, "\r\n")) != NULL) {
@@ -169,9 +185,9 @@ void uart_event_task(void *pvParameters)
                         buffer_len = 0;
                     }
 
-                    // 在处理数据的循环中也添加喂狗操作
+                    // 喂狗
                     while((end = strstr(start, "\r\n")) != NULL) {
-                        esp_task_wdt_reset();  // 在循环中喂狗
+                        esp_task_wdt_reset(); 
                         
                         *end = '\0';
                         if(strncmp(start, "$GNGGA", 6) == 0) {
@@ -181,13 +197,13 @@ void uart_event_task(void *pvParameters)
                         }
                         start = end + 2;
                         
-                        // 增加延时时间，给其他任务更多执行机会
+                        
                         vTaskDelay(pdMS_TO_TICKS(5));
                     }
                 }
             }
         }
-                // 每次循环结束也喂狗
+                //喂狗
                 esp_task_wdt_reset();
     }
     free(dtmp);
@@ -246,12 +262,15 @@ void app_main(void)
     } else {
         printf("错误：UART事件处理任务创建失败\n");
     }
+
+
+
     // 将主任务添加到看门狗监控
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
     // 主循环中喂狗
     while(1) {
         esp_task_wdt_reset();
-        vTaskDelay(pdMS_TO_TICKS(1000));  // 每秒喂一次狗
+        vTaskDelay(pdMS_TO_TICKS(1000));  
         lv_timer_handler();
     }
 }

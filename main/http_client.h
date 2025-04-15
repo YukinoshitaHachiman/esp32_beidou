@@ -16,7 +16,7 @@ typedef struct {
     float altitude;
 } gps_data_t;
 
-// 函数声明
+
 esp_err_t send_gps_data_to_server(const gps_data_t* data);
 
 #endif /* HTTP_CLIENT_H */
