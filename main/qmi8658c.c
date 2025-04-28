@@ -6,7 +6,7 @@
 #include "esp_log.h"
 #include <math.h>
 
-static const char *TAG = "QMI8658C";
+ const char *TAG = "QMI8658C";
 
 
 esp_err_t qmi8658c_register_read(uint8_t reg_addr, uint8_t *data, size_t len)

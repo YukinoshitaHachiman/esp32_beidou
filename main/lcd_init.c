@@ -264,5 +264,5 @@ void lvgl_init(void)
     #endif
 
     ESP_LOGI(TAG, "Display LVGL Meter Widget");
-    example_lvgl_demo_ui(disp);
+    //example_lvgl_demo_ui(disp);
 }

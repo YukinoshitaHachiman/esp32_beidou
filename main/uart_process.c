@@ -40,9 +40,9 @@ static void parse_gga(const char* sentence) {
         gps_data.lon_dir = lon_dir ? lon_dir : 'E';
         gps_data.data_ready = true;
         
-        ESP_LOGI(TAG, "GPS数据更新: %.7f°%c, %.7f°%c", 
-                decimal_lat, gps_data.lat_dir,
-                decimal_lon, gps_data.lon_dir);
+        // ESP_LOGI(TAG, "GPS数据更新: %.7f°%c, %.7f°%c", 
+        //         decimal_lat, gps_data.lat_dir,
+        //         decimal_lon, gps_data.lon_dir);
     }
 }
 
